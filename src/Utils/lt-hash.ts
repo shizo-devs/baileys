@@ -1,61 +1,73 @@
 import { hkdf } from './crypto'
 
-/**
- * LT Hash is a summation based hash algorithm that maintains the integrity of a piece of data
- * over a series of mutations. You can add/remove mutations and it'll return a hash equal to
- * if the same series of mutations was made sequentially.
- */
+const HASH_LENGTH = 128
 
-const o = 128
+type Mutation = string
+type MutationList = Mutation[]
+type MutationHash = Promise<ArrayBuffer> // important: now it's Promise<ArrayBuffer>
 
-class d {
+class LTHash {
+  salt: string
 
-	salt: string
+  constructor(salt: string) {
+    this.salt = salt
+  }
 
-	constructor(e: string) {
-		this.salt = e
-	}
-	add(e, t) {
-		var r = this
-		for(const item of t) {
-			e = r._addSingle(e, item)
-		}
+  async add(currentHash: MutationHash, mutations: MutationList): Promise<ArrayBuffer> {
+    let resolved = await currentHash
+    for (const item of mutations) {
+      resolved = await this._addSingle(resolved, item)
+    }
+    return resolved
+  }
 
-		return e
-	}
-	subtract(e, t) {
-		var r = this
-		for(const item of t) {
-			e = r._subtractSingle(e, item)
-		}
+  async subtract(currentHash: MutationHash, mutations: MutationList): Promise<ArrayBuffer> {
+    let resolved = await currentHash
+    for (const item of mutations) {
+      resolved = await this._subtractSingle(resolved, item)
+    }
+    return resolved
+  }
 
-		return e
-	}
-	subtractThenAdd(e, t, r) {
-		var n = this
-		return n.add(n.subtract(e, r), t)
-	}
-	async _addSingle(e, t) {
-		var r = this
-		const n = new Uint8Array(await hkdf(Buffer.from(t), o, { info: r.salt })).buffer
-		return r.performPointwiseWithOverflow(await e, n, ((e, t) => e + t))
-	}
-	async _subtractSingle(e, t) {
-		var r = this
+  async subtractThenAdd(
+    baseHash: MutationHash,
+    toAdd: MutationList,
+    toSubtract: MutationList
+  ): Promise<ArrayBuffer> {
+    const subtracted = await this.subtract(baseHash, toSubtract)
+    return this.add(Promise.resolve(subtracted), toAdd)
+  }
 
-		const n = new Uint8Array(await hkdf(Buffer.from(t), o, { info: r.salt })).buffer
-		return r.performPointwiseWithOverflow(e, n, ((e, t) => e - t))
-	}
-	performPointwiseWithOverflow(e, t, r) {
-		const n = new DataView(e)
-		  , i = new DataView(t)
-		  , a = new ArrayBuffer(n.byteLength)
-		  , s = new DataView(a)
-		for(let e = 0; e < n.byteLength; e += 2) {
-			s.setUint16(e, r(n.getUint16(e, !0), i.getUint16(e, !0)), !0)
-		}
+  private async _addSingle(hash: ArrayBuffer, mutation: Mutation): Promise<ArrayBuffer> {
+    const hkdfResult = await hkdf(Buffer.from(mutation), HASH_LENGTH, { info: this.salt })
+    const mutationBuffer = new Uint8Array(hkdfResult).buffer
+    return this.performPointwiseWithOverflow(hash, mutationBuffer, (a, b) => a + b)
+  }
 
-		return a
-	}
+  private async _subtractSingle(hash: ArrayBuffer, mutation: Mutation): Promise<ArrayBuffer> {
+    const hkdfResult = await hkdf(Buffer.from(mutation), HASH_LENGTH, { info: this.salt })
+    const mutationBuffer = new Uint8Array(hkdfResult).buffer
+    return this.performPointwiseWithOverflow(hash, mutationBuffer, (a, b) => a - b)
+  }
+
+  private performPointwiseWithOverflow(
+    bufferA: ArrayBuffer,
+    bufferB: ArrayBuffer,
+    operation: (a: number, b: number) => number
+  ): ArrayBuffer {
+    const viewA = new DataView(bufferA)
+    const viewB = new DataView(bufferB)
+    const result = new ArrayBuffer(viewA.byteLength)
+    const resultView = new DataView(result)
+
+    for (let offset = 0; offset < viewA.byteLength; offset += 2) {
+      const a = viewA.getUint16(offset, true)
+      const b = viewB.getUint16(offset, true)
+      resultView.setUint16(offset, operation(a, b), true)
+    }
+
+    return result
+  }
 }
-export const LT_HASH_ANTI_TAMPERING = new d('WhatsApp Patch Integrity')
+
+export const LT_HASH_ANTI_TAMPERING = new LTHash('WhatsApp Patch Integrity')
