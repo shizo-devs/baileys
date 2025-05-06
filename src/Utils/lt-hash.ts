@@ -1,73 +1,87 @@
 import { hkdf } from './crypto'
 
-const HASH_LENGTH = 128
+/**
+ * LT Hash is a summation based hash algorithm that maintains the integrity of a piece of data
+ * over a series of mutations. You can add/remove mutations and it'll return a hash equal to
+ * if the same series of mutations was made sequentially.
+ */
 
-type Mutation = string
-type MutationList = Mutation[]
-type MutationHash = Promise<ArrayBuffer> // important: now it's Promise<ArrayBuffer>
+const o = 128
 
-class LTHash {
-  salt: string
+class d {
 
-  constructor(salt: string) {
-    this.salt = salt
-  }
+	salt: string
 
-  async add(currentHash: MutationHash, mutations: MutationList): Promise<ArrayBuffer> {
-    let resolved = await currentHash
-    for (const item of mutations) {
-      resolved = await this._addSingle(resolved, item)
-    }
-    return resolved
-  }
+	constructor(e: string) {
+		this.salt = e
+	}
+	add(e, t) {
+		var r = this
+		for(const item of t) {
+			try {
+				e = r._addSingle(e, item)
+			} catch(error) {
+				continue
+			}
+		}
 
-  async subtract(currentHash: MutationHash, mutations: MutationList): Promise<ArrayBuffer> {
-    let resolved = await currentHash
-    for (const item of mutations) {
-      resolved = await this._subtractSingle(resolved, item)
-    }
-    return resolved
-  }
+		return e
+	}
+	subtract(e, t) {
+		var r = this
+		for(const item of t) {
+			try {
+				e = r._subtractSingle(e, item)
+			} catch(error) {
+				continue
+			}
+		}
 
-  async subtractThenAdd(
-    baseHash: MutationHash,
-    toAdd: MutationList,
-    toSubtract: MutationList
-  ): Promise<ArrayBuffer> {
-    const subtracted = await this.subtract(baseHash, toSubtract)
-    return this.add(Promise.resolve(subtracted), toAdd)
-  }
+		return e
+	}
+	subtractThenAdd(e, t, r) {
+		var n = this
+		try {
+			return n.add(n.subtract(e, r), t)
+		} catch(error) {
+			return e
+		}
+	}
+	async _addSingle(e, t) {
+		var r = this
+		try {
+			const n = new Uint8Array(await hkdf(Buffer.from(t), o, { info: r.salt })).buffer
+			return r.performPointwiseWithOverflow(await e, n, ((e, t) => e + t))
+		} catch(error) {
+			return e
+		}
+	}
+	async _subtractSingle(e, t) {
+		var r = this
+		try {
+			const n = new Uint8Array(await hkdf(Buffer.from(t), o, { info: r.salt })).buffer
+			return r.performPointwiseWithOverflow(e, n, ((e, t) => e - t))
+		} catch(error) {
+			return e
+		}
+	}
+	performPointwiseWithOverflow(e, t, r) {
+		try {
+			const n = new DataView(e)
+			  , i = new DataView(t)
+			  , a = new ArrayBuffer(n.byteLength)
+			  , s = new DataView(a)
+			for(let e = 0; e < n.byteLength; e += 2) {
+				try {
+					s.setUint16(e, r(n.getUint16(e, !0), i.getUint16(e, !0)), !0)
+				} catch(error) {
+				}
+			}
 
-  private async _addSingle(hash: ArrayBuffer, mutation: Mutation): Promise<ArrayBuffer> {
-    const hkdfResult = await hkdf(Buffer.from(mutation), HASH_LENGTH, { info: this.salt })
-    const mutationBuffer = new Uint8Array(hkdfResult).buffer
-    return this.performPointwiseWithOverflow(hash, mutationBuffer, (a, b) => a + b)
-  }
-
-  private async _subtractSingle(hash: ArrayBuffer, mutation: Mutation): Promise<ArrayBuffer> {
-    const hkdfResult = await hkdf(Buffer.from(mutation), HASH_LENGTH, { info: this.salt })
-    const mutationBuffer = new Uint8Array(hkdfResult).buffer
-    return this.performPointwiseWithOverflow(hash, mutationBuffer, (a, b) => a - b)
-  }
-
-  private performPointwiseWithOverflow(
-    bufferA: ArrayBuffer,
-    bufferB: ArrayBuffer,
-    operation: (a: number, b: number) => number
-  ): ArrayBuffer {
-    const viewA = new DataView(bufferA)
-    const viewB = new DataView(bufferB)
-    const result = new ArrayBuffer(viewA.byteLength)
-    const resultView = new DataView(result)
-
-    for (let offset = 0; offset < viewA.byteLength; offset += 2) {
-      const a = viewA.getUint16(offset, true)
-      const b = viewB.getUint16(offset, true)
-      resultView.setUint16(offset, operation(a, b), true)
-    }
-
-    return result
-  }
+			return a
+		} catch(error) {
+			return e
+		}
+	}
 }
-
-export const LT_HASH_ANTI_TAMPERING = new LTHash('WhatsApp Patch Integrity')
+export const LT_HASH_ANTI_TAMPERING = new d('WhatsApp Patch Integrity')
