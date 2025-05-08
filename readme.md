@@ -1,4 +1,4 @@
-# 🚀 BAILEYS-ELITE 🎀 
+# 🚀 BAILEYS-ELITE
 <div align="center">
 
   <img src="https://raw.githubusercontent.com/shizothetechie/database/refs/heads/main/image/shizo.png" width="350px">
