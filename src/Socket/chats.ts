@@ -330,6 +330,36 @@ export const makeChatsSocket = (config: SocketConfig) => {
 		})
 	}
 
+	const getBotList = async () => {
+        const resp = await query({
+            tag: 'iq',
+            attrs: {
+                xmlns: 'bot',
+                to: WABinary_1.S_WHATSAPP_NET,
+                type: 'get'
+            },
+            content: [{
+                tag: 'bot',
+                attrs: {
+                    v: '2'
+                }
+            }]
+        });
+        const botNode = (0, WABinary_1.getBinaryNodeChild)(resp, 'bot');
+        const botList = [];
+        for (const section of (0, WABinary_1.getBinaryNodeChildren)(botNode, 'section')) {
+            if (section.attrs.type === 'all') {
+                for (const bot of (0, WABinary_1.getBinaryNodeChildren)(section, 'bot')) {
+                    botList.push({
+                        jid: bot.attrs.jid,
+                        personaId: bot.attrs['persona_id']
+                    });
+                }
+            }
+        }
+        return botList;
+    };
+	
 	const getBusinessProfile = async(jid: string): Promise<WABusinessProfile | void> => {
 		const results = await query({
 			tag: 'iq',
@@ -1026,6 +1056,7 @@ export const makeChatsSocket = (config: SocketConfig) => {
 		updateReadReceiptsPrivacy,
 		updateGroupsAddPrivacy,
 		updateDefaultDisappearingMode,
+		getBotList,
 		getBusinessProfile,
 		resyncAppState,
 		chatModify,
